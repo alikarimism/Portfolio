@@ -1,1 +1,1 @@
-[Link to Algorithm Document] https://docs.google.com/document/d/15y4EefkXHqG2i7OtDkqQmyPYMjX7cKu1LibWsMyVfvs/edit?tab=t.0
+[Link to Document] https://docs.google.com/document/d/15y4EefkXHqG2i7OtDkqQmyPYMjX7cKu1LibWsMyVfvs/edit?tab=t.0
