@@ -33,7 +33,7 @@ EVENT_FAILED_LOGIN = 4625
 FLAGS = win32evtlog.EVENTLOG_FORWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
 
 # Thresholds:
-FAILURE_LIMIT = 10                 # More than 10 failures = suspicious
+FAILURE_LIMIT = 5                  # More than 5 failures = suspicious
 TIME_WINDOW = timedelta(hours=1)   # Look at failures inside a 1-hour window
 
 # Which logon types matter to us (types of login attempts):
@@ -123,97 +123,61 @@ def collect_failures():
 
 def analyze_failures(failures):
     """
-    Analyze failed login events to detect brute force attacks.
-
+    Look for brute force patterns in the failed login data.
+    
     RULE:
     - If a user has more than FAILURE_LIMIT failed logins
-      within a TIME_WINDOW (e.g. 1 hour), we consider it a brute force attack.
-
-    INPUT:
-    - failures: dictionary {account: [(timestamp, logon_type), ...]}
-        Example:
-        {
-          "alice": [(2025-09-01 12:00, 3), (2025-09-01 12:05, 3), ...],
-          "bob":   [(2025-09-01 14:00, 10), ...]
-        }
-
-    OUTPUT:
-    - alerts: list of text messages describing detected brute force attacks
+      inside a TIME_WINDOW (1 hour), we raise an ALERT.
+    
+    This function returns a list of alert messages.
     """
+    alerts = []
 
-    alerts = []  # we will fill this list with alert messages
-
-    # 🔍 Process each user account separately
+    # Check each account separately
     for account, entries in failures.items():
-
-        # Step 1: Sort events by timestamp (oldest → newest)
-        # Why? Because brute force detection depends on time order.
+        # Sort all attempts by time
         entries.sort(key=lambda x: x[0])
-
-        # Extract only the timestamps (ignore logon_type for now)
-        # Example: [(12:00, 3), (12:05, 3)] → [12:00, 12:05]
+        
+        # Just the timestamps
         timestamps = [t for t, _ in entries]
 
-        # Sliding window pointers
-        start = 0              # Left boundary of our "time window"
-        in_attack = False      # Flag: are we currently inside an attack?
-        attack_start = None    # When the current attack started
+        start = 0              # Start of sliding window
+        in_attack = False      # Are we currently inside an attack window?
+        attack_start = None    # First failed attempt of the attack
 
-        # Step 2: Move through all timestamps using 'end' as the right boundary
+        # Slide through timestamps (like a moving 1-hour window)
         for end in range(len(timestamps)):
-
-            # Step 2a: Shrink the window from the left
-            # ---------------------------------------
-            # If the time span between the newest event (end) and the oldest event (start)
-            # is longer than TIME_WINDOW (e.g. 1 hour), then "start" is too far behind.
-            # We move 'start' forward until the window fits inside 1 hour.
+            # If the window is larger than 1 hour, move the start forward
             while timestamps[end] - timestamps[start] > TIME_WINDOW:
                 start += 1
 
-            # Step 2b: Count the number of events inside the window
-            # -----------------------------------------------------
-            window_size = end - start + 1
+            window_size = end - start + 1  # Number of failures in this window
 
-            # Step 2c: Detect start of an attack
-            # ----------------------------------
-            # If there are more failures than allowed (FAILURE_LIMIT)
-            # AND we are not already in an attack, then this marks the
-            # beginning of a brute force attempt.
+            # If we cross the failure limit, mark it as an attack
             if window_size > FAILURE_LIMIT and not in_attack:
                 in_attack = True
-                attack_start = timestamps[start]  # record when attack started
+                attack_start = timestamps[start]
 
-            # Step 2d: Detect end of an attack
-            # --------------------------------
-            # The attack ends in two cases:
-            # 1. We are at the very last timestamp
-            # 2. The next timestamp would push the window beyond 1 hour
-            if in_attack and (
-                end == len(timestamps) - 1 or
-                timestamps[end+1] - timestamps[start] > TIME_WINDOW
-            ):
-                attack_end = timestamps[end]        # last timestamp in attack
-                attack_size = end - start + 1       # how many failures happened
+            # If the attack window is ending
+            if in_attack and (end == len(timestamps) - 1 or
+                              timestamps[end+1] - timestamps[start] > TIME_WINDOW):
+                attack_end = timestamps[end]
+                attack_size = end - start + 1
 
-                # Step 2e: Collect logon types used during the attack
-                # ---------------------------------------------------
-                # entries[start:end+1] → all events in this window
-                # lt = logon_type (second element of each tuple)
+                # Collect the logon types used during this attack
                 window_logon_types = set(lt for ts, lt in entries[start:end+1])
 
-                # Step 2f: Build a human-readable alert message
+                # Build an alert message
                 alerts.append(
                     f"[ALERT] Account '{account}' had {attack_size} failed logins "
                     f"between {attack_start} and {attack_end} "
                     f"(LogonTypes={sorted(window_logon_types)})"
                 )
 
-                # Step 2g: Reset attack state
-                # ---------------------------
+                # Reset attack state
                 in_attack = False
                 attack_start = None
 
-    # Return all alerts found across all accounts
     return alerts
 
 
