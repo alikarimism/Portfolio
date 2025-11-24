@@ -49,3 +49,11 @@ This Config Will:
 </EventFiltering>
 </Sysmon>
 
+-----------------
+How to update Sysmon configuration?
+sysmon64 -c SysmonConfiguration.xml 
+
+How to see sysmon EventCode 1 logs in powershell? (you can change 1 to your intended EventCode)
+
+Get-WinEvent @{logname="Microsoft-Windows-Sysmon/Operational";id=1}| fl | more 
+
