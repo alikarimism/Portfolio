@@ -1,0 +1,51 @@
+This Config Will:
+
+1. Log SHA1 hashes only.
+
+2. Log DriverLoad, except for drivers with a signature containing "microsoft", "windows", or "sysinternals".
+
+3. Log ImageLoad, except for images (DLLs) with a signature containing "microsoft", "windows" or "sysinternals".
+
+4. Disable process termination logging.
+
+5. Log network connections, but ignore ports 80, 137, and 443.
+
+6. Log process creation:
+
+  a. Use the SHA1 hash to ignore putty.exe
+7. Log DNS events
+
+------------------------------------------------------------------------------------------
+
+<Sysmon schemaversion="4.82">
+<HashAlgorithms>SHA1</HashAlgorithms>
+<EventFiltering>
+
+<DriverLoad onmatch="exclude">
+	<Signature condition="contains">microsoft</Signature>
+	<Signature condition="contains">sysinternals</Signature>
+	<Signature condition="contains">sysmon</Signature>
+</DriverLoad>
+
+<ImageLoad onmatch="exclude">
+	<Signature condition="contains">microsoft</Signature>
+	<Signature condition="contains">sysinternals</Signature>
+	<Signature condition="contains">sysmon</Signature>
+</ImageLoad>
+
+<ProcessTerminate onmatch="include" />	
+
+<NetworkConnect onmatch="exclude">
+	<DestinationPort>443</DestinationPort>
+	<DestinationPort>137</DestinationPort>
+	<DestinationPort>80</DestinationPort>
+</NetworkConnect>
+
+<ProcessCreate onmatch="exclude">
+	<Hashes condition="contains">f77b4e6a6a53332111691f5b714b1fe8783a0bbe</Hashes>
+</ProcessCreate>
+<DnsQuery onmatch="exclude" />
+
+</EventFiltering>
+</Sysmon>
+
